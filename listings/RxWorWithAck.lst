@@ -1,0 +1,292 @@
+C51 COMPILER V7.20   RXWORWITHACK                                                          03/07/2007 19:19:54 PAGE 1   
+
+
+C51 COMPILER V7.20, COMPILATION OF MODULE RXWORWITHACK
+OBJECT MODULE PLACED IN .\objects\RxWorWithAck.obj
+COMPILER INVOKED BY: C:\Keil\C51\BIN\C51.EXE RxWorWithAck.c OMF2 BROWSE INCDIR(..\..\..\..\..\Inc;..\..\..\..\..\lib) DE
+                    -FINE(FREQ_2_4,STAND_ALONE) DEBUG PRINT(.\listings\RxWorWithAck.lst) OBJECT(.\objects\RxWorWithAck.obj)
+
+line level    source
+
+   1          /*******************************************************************************************************
+   2           *                                                                                                     *
+   3           *        **********                                                                                   *
+   4           *       ************                                                                                  *
+   5           *      ***        ***                                                                                 *
+   6           *      ***   +++   ***     This file contains all functions related to the receiving (WOR) unit       *
+   7           *      ***   + +   ***                                                                                *
+   8           *      ***   +                                                                                        *
+   9           *      ***   + +   ***                                                                                *
+  10           *      ***   +++   ***     RxWorWithAck.c                                                             *
+  11           *      ***        ***                                                                                 *
+  12           *       ************                                                                                  *
+  13           *        **********                                                                                   *
+  14           *                                                                                                     *
+  15           *******************************************************************************************************
+  16           * Compiler:                Keil C51 V7.50                                                             *
+  17           * Target platform:         Chipcon CCxxx0 (Silabs F320)                                               *
+  18           * Author:                  ESY                                                                        *
+  19           *******************************************************************************************************
+  20           * Revision history:     See end of file                                                               *
+  21           *******************************************************************************************************/
+  22          #include <Chipcon\srf04\regssrf04.h>
+  23          #include <Chipcon\srf04\halsrf04.h>
+  24          #include <Chipcon\srf04\ebsrf04.h>
+  25          #include <WorWithAck.h>
+  26          
+  27          
+  28          
+  29          
+  30          //-------------------------------------------------------------------------------------------------------
+  31          // Defines
+  32          #define RX_BYTES    0x7F
+  33          //-------------------------------------------------------------------------------------------------------
+  34          
+  35          
+  36          
+  37          
+  38          //-------------------------------------------------------------------------------------------------------
+  39          // Global Variables
+  40          
+  41          // Variables to control the incoming packets and outgoing ACKs
+  42          UINT32 xdata packetsTransmitted = 0;
+  43          
+  44          UINT8 xdata sendAck = FALSE;
+  45          
+  46          BYTE txBuffer[3];
+  47          
+  48          
+  49          UINT8 xdata updated = FALSE;
+  50          //-------------------------------------------------------------------------------------------------------
+  51          
+  52          
+  53          
+  54          
+C51 COMPILER V7.20   RXWORWITHACK                                                          03/07/2007 19:19:54 PAGE 2   
+
+  55          //-------------------------------------------------------------------------------------------------------
+  56          // Function declarations
+  57          void initReceiver();
+  58          void reactor(void);
+  59          //-------------------------------------------------------------------------------------------------------
+  60          
+  61          
+  62          
+  63          
+  64          //-------------------------------------------------------------------------------------------------------
+  65          //  void runReceiver(void)
+  66          //
+  67          //  DESCRIPTION:
+  68          //      This function is used to put the radio in SLEEP mode using WOR. If the MCU detects that a packet
+  69          //      is received, this function will send an ACK and then update the LCD display in accordance with 
+  70          //      the packet data received.
+  71          //-------------------------------------------------------------------------------------------------------
+  72          void runReceiver(void) {
+  73   1      
+  74   1         BYTE temp0;
+  75   1         BYTE temp1;
+  76   1                   // The MCU could here enter some power-down state to reduce power consumption while waiting for a 
+  77   1          // WOR interrupt from the CCxx00 radio (this is not implemented here in this example 
+  78   1          // - instead there is a while loop updating the LCD).
+  79   1               
+  80   1      
+  81   1          // Initialize receiver
+  82   1          initReceiver();
+  83   1      
+  84   1      
+  85   1           // Write custom sync word (avoiding default sync word)
+  86   1          // Write custom sync word (avoiding default sync word)
+  87   1          halSpiWriteReg(CCxxx0_SYNC1, 0x9B);
+  88   1          halSpiWriteReg(CCxxx0_SYNC0, 0xAD);
+  89   1                  // Put the radio to SLEEP by starting Wake-on-Radio.
+  90   1          halSpiStrobe(CCxxx0_SWORRST);           // Resets the real time clock
+  91   1          halSpiStrobe(CCxxx0_SWOR);              // Starts Wake-on-Radio
+  92   1      
+  93   1      
+  94   1               reactor();
+  95   1               temp0 = rxBuffer[0];
+  96   1               reactor();
+  97   1              temp1 = rxBuffer[0];
+  98   1      
+  99   1          halSpiWriteReg(CCxxx0_SYNC0,temp0);           //write sync word received data id code
+ 100   1          halSpiWriteReg(CCxxx0_SYNC1, temp1);
+ 101   1      
+ 102   1      
+ 103   1          reactor();   //put last id byte in rxBuffer[0]
+ 104   1      
+ 105   1              while(1){
+ 106   2              reactor();
+ 107   2              }
+ 108   1      
+ 109   1       }
+ 110          
+ 111          
+ 112          
+ 113          
+ 114                  void reactor(void){
+ 115   1      
+ 116   1              
+C51 COMPILER V7.20   RXWORWITHACK                                                          03/07/2007 19:19:54 PAGE 3   
+
+ 117   1          INT_SETFLAG(INUM_EXTERNAL1, INT_CLR);   // Clear interrupt flag
+ 118   1          INT_ENABLE(INUM_EXTERNAL1, INT_ON); 
+ 119   1              while(!updated) ;
+ 120   1                    updated = FALSE;
+ 121   1               INT_ENABLE(INUM_EXTERNAL1, INT_OFF); 
+ 122   1      
+ 123   1              }
+ 124          
+ 125          //-------------------------------------------------------------------------------------------------------
+ 126          //  void initReceiver(void)
+ 127          //
+ 128          //  DESCRIPTION:
+ 129          //      This function is configuring some specific radio register settings and initiating 
+ 130          //      interrupt for the receiver/WOR unit.
+ 131          //-------------------------------------------------------------------------------------------------------
+ 132          void initReceiver(void) {
+ 133   1      
+ 134   1          // Configuring all the WOR related settings
+ 135   1          // Enable automatic initial calibration of RCosc.
+ 136   1          // Set T_event1 ~ 345 us, enough for XOSC stabilize before starting calibration.
+ 137   1          // Enable RC oscillator before starting with WOR (or else it will not wake up).
+ 138   1          halSpiWriteReg(CCxxx0_WORCTRL, 0x38);           // Not using AUTO_SYNC function.
+ 139   1      
+ 140   1          // Set Event0 timeout = 300 ms (RX polling interval)
+ 141   1          // WOR_RES = 0
+ 142   1          // T_event0 = 750 / f_xosc * EVENT0 * 2^(5*WOR_RES) = 300 ms    // Assuming f_xosc = 26 MHz
+ 143   1          // =>  EVENT0 = 10400 = 0x28A0
+ 144   1          halSpiWriteReg(CCxxx0_WOREVT1, 0x28);                           // High byte Event0 timeout
+ 145   1          halSpiWriteReg(CCxxx0_WOREVT0, 0xA0);                           // Low byte Event0 timeout.
+ 146   1      
+ 147   1          // Setting Rx_timeout < 0.5 %.
+ 148   1          // => MCSM2.RX_TIME = 101b
+ 149   1          // => Rx_timeout = EVENT0 * 0.1127 = 10400 * 0.1127 = 1.172 ms, i.e. 0.391% RX duty cycle
+ 150   1          halSpiWriteReg(CCxxx0_MCSM2, 0x05);
+ 151   1      
+ 152   1          // Enable automatic FS calibration when going from IDLE to RX/TX/FSTXON (starting at EVENT1)
+ 153   1          halSpiWriteReg(CCxxx0_MCSM0, 0x18);
+ 154   1      
+ 155   1          // RXOFF_MODE=01b (RX->FSTXON: 9.6 us), TXOFF_MODE=00b (TX->IDLE, no FS calib: 0.1 us).
+ 156   1          halSpiWriteReg(CCxxx0_MCSM1, 0x04);
+ 157   1      
+ 158   1      
+ 159   1          // Enable external interrupt when packet is received
+ 160   1          // IOCFG2 register = 0x06 => GDO2 pin is asserted when sync word detected/sent, de-asserted at 
+ 161   1          // end of packet.
+ 162   1          // MCU is interrupted by radio on low edge of GDO2, i.e. whenever a packet is received.
+ 163   1          ENABLE_GLOBAL_INT(INT_OFF);
+ 164   1          SETUP_GDO2_INT(EDGE, LOW);                  // Enable external interrupt on low edge
+ 165   1          INT_SETFLAG(INUM_EXTERNAL1, INT_CLR);       // Clear the interrupt flag
+ 166   1          ENABLE_GLOBAL_INT(INT_ON);
+ 167   1      }// initReceiver
+ 168          
+ 169          
+ 170          
+ 171          //-------------------------------------------------------------------------------------------------------
+ 172          //  void EXTERNAL1_ISR(void)
+ 173          //
+ 174          //  DESCRIPTION:
+ 175          //      This interrupt service routine occurs whenever the radio detects a packet using Wake-on-Radio
+ 176          //-------------------------------------------------------------------------------------------------------
+ 177          void EXTERNAL1_ISR(void) interrupt INUM_EXTERNAL1 {
+ 178   1          UINT8 packetLength;
+C51 COMPILER V7.20   RXWORWITHACK                                                          03/07/2007 19:19:54 PAGE 4   
+
+ 179   1      
+ 180   1          // The contents of TX FIFO and RX FIFO are cleared when entering SLEEP state (WOR),
+ 181   1          // so the RX FIFO does only contain the new packet.
+ 182   1          // The CRC_AUTOFLUSH function is enabled: automatically flushing the RX FIFO if received packet 
+ 183   1          // contains CRC error
+ 184   1          // Fixed packet length enabled (1 byte): packets longer than 1 byte is automatically filtered out
+ 185   1      
+ 186   1          // Disable new interrupts
+ 187   1          INT_ENABLE(INUM_EXTERNAL1, INT_OFF);    
+ 188   1          
+ 189   1          // Radio should now be in FSTXON state (RXOFF_MODE).
+ 190   1      
+ 191   1          // Check if we got any packets in the RX FIFO
+ 192   1          // This status register is safe to read since it will not be updated after
+ 193   1          // the packet has been received (See the CC1100 or 2500 Errata Note)
+ 194   1          packetLength = halSpiReadStatus(CCxxx0_RXBYTES) & RX_BYTES;
+ 195   1      
+ 196   1          if (packetLength != 0) { // Packet received ok.. Must reply with ACK.
+ 197   2      
+ 198   2              // Read out packet (should only be one byte with joystickposition)
+ 199   2              rxBuffer[0] = halSpiReadReg(CCxxx0_RXFIFO);
+ 200   2      
+ 201   2                      halWait(10);
+ 202   2      
+ 203   2              // Write ACK byte into TX FIFO and send ACK as quickly as possible
+ 204   2              // ACK byte is the received byte inverted
+ 205   2              halSpiWriteReg(CCxxx0_TXFIFO, (rxBuffer[0]^0xFF));  
+ 206   2              halSpiStrobe(CCxxx0_STX);
+ 207   2      
+ 208   2              while (!GDO2_PIN);
+ 209   2              while (GDO2_PIN);   // Wait for GDO2 to be de-asserted => end of transmitted packet
+ 210   2      
+ 211   2      
+ 212   2                      
+ 213   2              // Put radio back to sleep/WOR (must be in IDLE when this is done)
+ 214   2          //   halSpiStrobe(CCxxx0_SWOR);
+ 215   2      
+ 216   2              // Parsing received data byte into correct char for proper LCD presentation
+ 217   2       
+ 218   2      
+ 219   2      
+ 220   2                      halSpiStrobe(CCxxx0_SIDLE);
+ 221   2              halSpiStrobe(CCxxx0_SWOR);
+ 222   2              updated = TRUE;
+ 223   2              P_LED1 = ~P_LED1;   // Toggle green LED for packet received.
+ 224   2              P_LED4 = ~P_LED4;   // Toggle blue LED for ACK sent.
+ 225   2          } else { // No packet received. No need for ACK.
+ 226   2      
+ 227   2              // Go back to sleep/WOR (have to go via IDLE, i.e.: FSTXON -> IDLE -> SLEEP)
+ 228   2              halSpiStrobe(CCxxx0_SIDLE);
+ 229   2              halSpiStrobe(CCxxx0_SWOR);
+ 230   2      
+ 231   2              P_LED2 = ~P_LED2;   // Toggle red LED for error.
+ 232   2          }
+ 233   1      
+ 234   1          INT_SETFLAG(INUM_EXTERNAL1, INT_CLR);   // Clear interrupt flag
+ 235   1               INT_ENABLE(INUM_EXTERNAL1, INT_ON);  
+ 236   1      
+ 237   1          // The MCU could now enter some power-down state to reduce power consumption while waiting 
+ 238   1          // for the next WOR interrupt from the CC2500 radio (this is not implemented here).
+ 239   1      
+ 240   1      }// EXTERNAL1_ISR
+C51 COMPILER V7.20   RXWORWITHACK                                                          03/07/2007 19:19:54 PAGE 5   
+
+ 241          
+ 242          
+ 243          /******************************************************************************************************
+ 244           * Revision history:                                                                                  *
+ 245           *
+ 246           * $Log: RxWorWithAck.c,v $
+ 247           * Revision 1.2  2006/04/25 15:03:34  a0190596
+ 248           * tEVENT1 changed from 1.38 ms to 345 us.
+ 249           * Comments added
+ 250           *
+ 251           * Revision 1.1  2005/10/06 12:13:31  sna
+ 252           * Initial version in CVS.
+ 253           *
+ 254           *
+ 255           *
+ 256           ******************************************************************************************************/
+
+
+MODULE INFORMATION:   STATIC OVERLAYABLE
+   CODE SIZE        =    294    ----
+   CONSTANT SIZE    =   ----    ----
+   XDATA SIZE       =      6    ----
+   PDATA SIZE       =   ----    ----
+   DATA SIZE        =      3       2
+   IDATA SIZE       =   ----    ----
+   BIT SIZE         =   ----    ----
+   EDATA SIZE       =   ----    ----
+   HDATA SIZE       =   ----    ----
+   XDATA CONST SIZE =   ----    ----
+   FAR CONST SIZE   =   ----    ----
+END OF MODULE INFORMATION.
+
+
+C51 COMPILATION COMPLETE.  0 WARNING(S),  0 ERROR(S)

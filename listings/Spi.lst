@@ -1,0 +1,181 @@
+C51 COMPILER V7.20   SPI                                                                   03/07/2007 14:39:44 PAGE 1   
+
+
+C51 COMPILER V7.20, COMPILATION OF MODULE SPI
+OBJECT MODULE PLACED IN .\objects\Spi.obj
+COMPILER INVOKED BY: C:\Keil\C51\BIN\C51.EXE Spi.c OMF2 BROWSE INCDIR(..\..\..\..\..\Inc;..\..\..\..\..\lib) DEFINE(FREQ
+                    -_2_4,STAND_ALONE) DEBUG PRINT(.\listings\Spi.lst) OBJECT(.\objects\Spi.obj)
+
+line level    source
+
+   1          /*******************************************************************************************************
+   2           *                                                                                                     *
+   3           *        **********                                                                                   *
+   4           *       ************                                                                                  *
+   5           *      ***        ***                                                                                 *
+   6           *      ***   +++   ***                                                                                *
+   7           *      ***   + +   ***     This file contains a test program for showing how to use the different     *
+   8           *      ***   +             SPI library function toward the CC2500.The program will also use the UART  *
+   9           *      ***   + +   ***     to display register values on a PC running hyper terminal.                 *
+  10           *      ***   +++   ***     Spi.c                                                                      *
+  11           *      ***        ***                                                                                 *
+  12           *       ************                                                                                  *
+  13           *        **********                                                                                   *
+  14           *                                                                                                     *
+  15           *******************************************************************************************************
+  16           * Compiler:                Keil C51 V7.50                                                             *
+  17           * Target platform:         Chipcon CCxxx0 (Silabs F320)                                               *
+  18           * Author:                  SNA                                                                        *
+  19           *******************************************************************************************************
+  20           * Revision history:        See end of file                                                            *
+  21           ******************************************************************************************************/
+  22          #include <Chipcon\srf04\regssrf04.h>
+  23          #include <Chipcon\srf04\halsrf04.h>
+  24          #include <Chipcon\srf04\ebsrf04.h>
+  25          #include <stdio.h>
+  26          #include <ctype.h>
+  27          #include <RegSettings_Spi.h>
+  28          
+  29          
+  30          
+  31          
+  32          //-------------------------------------------------------------------------------------------------------
+  33          //  Global Variables
+  34          
+  35          RF_SETTINGS code rfSettings;
+  36          
+  37          BYTE code paTable[];
+  38          
+  39          BYTE idata buffer[8];
+  40          //-------------------------------------------------------------------------------------------------------
+  41          
+  42          #define WTE_            0x40   //watchdog timer enable
+  43          
+  44          
+  45          
+  46          //-------------------------------------------------------------------------------------------------------
+  47          // Function declarations
+  48          
+  49          //-------------------------------------------------------------------------------------------------------
+  50          
+  51          
+  52          
+  53          
+  54          //-------------------------------------------------------------------------------------------------------
+C51 COMPILER V7.20   SPI                                                                   03/07/2007 14:39:44 PAGE 2   
+
+  55          //  void main(void)
+  56          //
+  57          //  DESCRIPTION:
+  58          //      The purpose of this program is to show the use of the different SPI function supported in the
+  59          //      hal library.  
+  60          //      on a PC running hyper terminal.
+  61          //      The port settings should be as follows:
+  62          //
+  63          //      Bits per second:    115200
+  64          //      Data bits:          8
+  65          //      Parity:             None
+  66          //      Stop bits:          1
+  67          //      Flow control:       None
+  68          //-------------------------------------------------------------------------------------------------------
+  69          void main (void) {
+  70   1          UINT8 menuEntry;
+  71   1          
+  72   1          #ifdef STAND_ALONE
+  73   1              // internal low frequency 80 Khz
+  74   1                  OSCLCN    = 0x83;
+  75   1                  CLKSEL    = 0x02;
+  76   1          #endif
+  77   1      
+  78   1              // Set up the crossbar and I/O ports to communicate with the SmartRF04EB peripherals
+  79   1          
+  80   1          // P0.0  -  SCK  (SPI0), Push-Pull,  Digital
+  81   1          // P0.1  -  MISO (SPI0), Open-Drain, Digital
+  82   1          // P0.2  -  MOSI (SPI0), Push-Pull,  Digital
+  83   1          // P0.3  -  NSS  (SPI0), Push-Pull,  Digital
+  84   1          // P0.4  -  Unassigned,  Open-Drain, Digital
+  85   1          // P0.5  -  Unassigned,  Open-Drain, Digital
+  86   1          // P0.6  -  Unassigned,  Open-Drain, Digital
+  87   1          // P0.7  -  Unassigned,  Open-Drain, Digital
+  88   1      
+  89   1          // P1.0  -  Unassigned,  Push-Pull,  Digital
+  90   1          // P1.1  -  Unassigned,  Open-Drain, Digital
+  91   1          // P1.2  -  Unassigned,  Open-Drain, Digital
+  92   1          // P1.3  -  Unassigned,  Open-Drain, Digital
+  93   1          // P1.4  -  Unassigned,  Open-Drain, Digital
+  94   1          // P1.5  -  Unassigned,  Open-Drain, Digital
+  95   1          // P1.6  -  Unassigned,  Open-Drain, Digital
+  96   1          // P1.7  -  Unassigned,  Open-Drain, Digital
+  97   1      
+  98   1          P0MDOUT   = 0x0D;
+  99   1          P1MDOUT   = 0x01;
+ 100   1          XBR0      = 0x02;
+ 101   1          XBR1      = 0xC1;   // BM_PCA0ME_1 Ãß°¡
+ 102   1          
+ 103   1              
+ 104   1              // watchdog timer disable
+ 105   1          PCA0MD &= (~WTE_); 
+ 106   1      
+ 107   1              
+ 108   1              SPI0CFG = BM_MSTEN; 
+ 109   1          SPI0CN = BM_NSSMD1;
+ 110   1          SPI0CKR   = 0x05; 
+ 111   1      
+ 112   1          SPI_ENABLE(); 
+ 113   1      
+ 114   1      
+ 115   1          POWER_UP_RESET_CCxxx0();
+ 116   1      
+C51 COMPILER V7.20   SPI                                                                   03/07/2007 14:39:44 PAGE 3   
+
+ 117   1              menuEntry =1;
+ 118   1      
+ 119   1      
+ 120   1          //displayMenu();
+ 121   1      
+ 122   1          // Enable the UART receiver
+ 123   1          //UART_RX_ENABLE();
+ 124   1      
+ 125   1          // Infinite loop
+ 126   1          while (TRUE) {
+ 127   2                  
+ 128   2                              menuEntry =1;
+ 129   2                              
+ 130   2                  // Write to PATABLE
+ 131   2                  halSpiWriteBurstReg(CCxxx0_PATABLE, paTable, sizeof(paTable));              
+ 132   2                      
+ 133   2                              menuEntry =0;
+ 134   2                              
+ 135   2                  // Read PATABLE
+ 136   2                  halSpiReadBurstReg(CCxxx0_PATABLE, buffer, sizeof(paTable));                                
+ 137   2      
+ 138   2          }
+ 139   1      }
+ 140          
+ 141          
+ 142          
+ 143          
+ 144          //------------------------------------------------------------------------------------------------------
+ 145          //  void displayMenu(void)
+ 146          //
+ 147          //  DESCRIPTION:
+ 148          //      Function which displays the Menu on the PC    
+ 149          //------------------------------------------------------------------------------------------------------
+
+
+MODULE INFORMATION:   STATIC OVERLAYABLE
+   CODE SIZE        =    116    ----
+   CONSTANT SIZE    =     35    ----
+   XDATA SIZE       =   ----    ----
+   PDATA SIZE       =   ----    ----
+   DATA SIZE        =   ----       1
+   IDATA SIZE       =      8    ----
+   BIT SIZE         =   ----    ----
+   EDATA SIZE       =   ----    ----
+   HDATA SIZE       =   ----    ----
+   XDATA CONST SIZE =   ----    ----
+   FAR CONST SIZE   =   ----    ----
+END OF MODULE INFORMATION.
+
+
+C51 COMPILATION COMPLETE.  0 WARNING(S),  0 ERROR(S)

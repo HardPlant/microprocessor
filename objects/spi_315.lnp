@@ -1,0 +1,9 @@
+"..\..\..\..\..\LIB\Chipcon\srf04\ebsrf04.LIB",
+"..\..\..\..\..\LIB\Chipcon\srf04\halsrf04.LIB",
+".\objects\TxWorWithAck.obj",
+".\objects\WorWithAck.obj",
+".\objects\RegSettings_Wor.obj",
+".\objects\RxWorWithAck.obj" 
+TO ".\objects\spi_315" 
+
+PRINT(".\listings\spi_315.map")

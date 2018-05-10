@@ -1,0 +1,1 @@
+"TxWorWithAck.c" OMF2 BROWSE INCDIR(..\..\..\..\..\Inc; ..\..\..\..\..\lib) DEFINE (FREQ_2_4,STAND_ALONE) DEBUG PRINT(.\listings\TxWorWithAck.lst) OBJECT(.\objects\TxWorWithAck.obj)

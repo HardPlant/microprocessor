@@ -1,0 +1,8 @@
+		while (P0_1); 
+        SPI0DAT = CCxxx0_SRES;
+		 
+       
+        while (!INT_GETFLAG(INUM_SPI0_IF)); 
+        INT_SETFLAG(INUM_SPI0_IF, INT_CLR);
+        while (P0_1); 
+        NSSMD0 = 1; 

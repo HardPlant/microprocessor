@@ -1,0 +1,1 @@
+"RxWorWithAck.c" OMF2 BROWSE INCDIR(..\..\..\..\..\Inc; ..\..\..\..\..\lib) DEFINE (FREQ_2_4,STAND_ALONE) DEBUG PRINT(.\listings\RxWorWithAck.lst) OBJECT(.\objects\RxWorWithAck.obj)

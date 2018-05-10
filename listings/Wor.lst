@@ -1,0 +1,894 @@
+C51 COMPILER V8.12   WOR                                                                   05/10/2018 12:31:22 PAGE 1   
+
+
+C51 COMPILER V8.12, COMPILATION OF MODULE WOR
+OBJECT MODULE PLACED IN .\objects\Wor.obj
+COMPILER INVOKED BY: C:\Keil\C51\BIN\C51.EXE Wor.c LARGE OMF2 BROWSE INCDIR(..\..\..\..\..\Inc;..\..\..\..\..\lib) DEFIN
+                    -E(FREQ_2_4,STAND_ALONE) DEBUG PRINT(.\listings\Wor.lst) OBJECT(.\objects\Wor.obj)
+
+line level    source
+
+   1          /*                    Wor_v4.c(channel 0)                                   *
+   2           *******************************************************************************************************
+   3           * Compiler:                Keil C51 V7.50                                                             *
+   4           * Target platform:         Chipcon CCxxx0 (Silabs F335)                                               *
+   5           * Author:                  Young Min Kim                                                                 
+             -      *
+   6           *******************************************************************************************************
+   7           * Revision history:     See end of file                                                               *
+   8           *******************************************************************************************************/
+   9          #include <Chipcon\srf04\regssrf04.h>
+  10          #include <Chipcon\srf04\halsrf04.h>
+  11          #include <Chipcon\srf04\ebsrf04.h>
+  12          #include <RegSettings_Wor.h>
+  13                                                                                    //Best !!!!!!!!!! Use with wor_v4(RX)
+  14          
+  15                  //         2channel(channel 0)  TX   Working Perfect!!!!!!!!!!!!!
+  16          
+  17          //-------------------------------------------------------------------------------------------------------
+  18          //  DESCRIPTION:
+  19          //      This example is a simple implementation of a control system for a radio-controlled object.
+  20          //      The system is modeled as a simplex system with a transmitting remote 
+  21          //      control sending packets with control commands to the remotely controlled receiving object. 
+  22          //      WOR is used to reduce power consumption at the receiver side.
+  23          //      One evaluation board (EB) is set up as the remote control (TX unit), and the other as 
+  24          //      the remotely controlled object (RX/WOR unit). Data regarding movements of the joystick on 
+  25          //      the remote control are transmitted to the receiver and displayed on the LCD of this EB.
+  26          //      Please see App. Note 38 for more details.
+  27          //      
+  28          //      RX UNIT:
+  29          //          * Move joystick right to choose RX
+  30          //          * Push the S1 button to confirm your choice. 
+  31          //          After the unit has been configured, the yellow LED will be on.
+  32          //
+  33          //          GLED: Toggles when a packet has been received successfully.
+  34          //          RLED: Toggles when an invalid packet has been received. 
+  35          //          BLED: Toggles when a packet is received and an interrupt is given to the MCU.
+  36          //
+  37          //      TX UNIT:
+  38          //          * Move joystick left to choose TX
+  39          //          * Push the S1 button to confirm your choice. 
+  40          //          After the unit has been configured, the yellow LED will turn on.
+  41          //
+  42          //          BLED: Toggles when a packet has been sent.
+  43          //
+  44          //      If the TX unit is selected, you are now able to push the joystick button or move it up, 
+  45          //      down, left or right. This will start the packet burst. When all the packets (305) are transmitted
+  46          //      "Done" will be displayed at the LCD. One should not move the joystick to a new position before
+  47          //      the previous burst transmission has completed. 
+  48          //
+  49          //      If the RX unit is selected, it will automatically enter the WOR mode, waiting for packets. 
+  50          //
+  51          //      The LCD will continuously display how many valid packets have been received together with 
+  52          //      the position of the joystick on the remote control.
+  53          //      
+C51 COMPILER V8.12   WOR                                                                   05/10/2018 12:31:22 PAGE 2   
+
+  54          //      The program can be terminated by pressing the S1 button after the setup has been done. 
+  55          //      This will turn off the yellow LED.
+  56          //
+  57          //      Current config. specs
+  58          //
+  59          //          Common Settings:
+  60          //              Packet format = 4B preamble + 4B sync word + 1B payload + 2B CRC = 11 Bytes
+  61          //
+  62          //          TX Unit Settings:
+  63          //              Packet interval:    1.0 ms
+  64          //              Packet send time:   ~ 11 B * 8 bit/B / 250 kbps = 352 us
+  65          //              Tx duty cycle:      ~ 352 us / 1.0 ms = 35.2 %
+  66          //
+  67          //          RX/WOR Unit Settings:
+  68          //              Event0 timeout:     300 ms
+  69          //              Event1 timeout:     ~ 1.4 ms (f_xosc = 26 MHz)
+  70          //              Rx timeout:         ~ 1.172 ms
+  71          //              Rx duty cycle:      ~ 1.172 ms / 300 ms = 0.391 %
+  72          //-------------------------------------------------------------------------------------------------------
+  73          
+  74          
+  75          
+  76          
+  77          //-------------------------------------------------------------------------------------------------------
+  78          // Defines
+  79          
+  80          
+  81          //-------------------------------------------------------------------------------------------------------
+  82          
+  83          #define WTE_            0x40   //watchdog timer enable
+  84          
+  85          
+  86          
+  87          
+  88          
+  89          
+  90                                          
+  91          
+  92          //-------------------------------------------------------------------------------------------------------
+  93          // Defines
+  94          
+  95          //#define GDO0_            P0_6
+  96             
+  97          //-------------------------------------------------------------------------------------------------------
+  98          //#define GDO2_        P0_7     
+  99          
+ 100          
+ 101          //-------------------------------------------------------------------------------------------------------
+ 102          // Global Variables
+ 103          
+ 104          //char code  first_entered           _at_ 0xDF0;                
+ 105          //char  xdata * idata ptr_first_entered=&first_entered  ;       
+ 106          //
+ 107          //// // char code  lock_byte                    _at_ 0x0FFE;
+ 108          //char code  lock_byte                          _at_ 0x0FFF ;
+ 109          // char  xdata * idata ptr_lock_byte=&lock_byte ;
+ 110          ////BYTE code save1=0x03;
+ 111          //BYTE code channel_no=0x03;
+ 112          // BYTE code save0=0x34;
+ 113          ////BYTE code save2=0x01;
+ 114          //  char temp_first;
+ 115          //char temp33=0x33;
+C51 COMPILER V8.12   WOR                                                                   05/10/2018 12:31:22 PAGE 3   
+
+ 116          ////UINT32 count= 0;
+ 117          ////UINT8 j=0;
+ 118          ////UINT32 packetsReceived = 0;
+ 119          ////char xdata * data pwrite;           // FLASH write pointer
+ 120          //      //   char code * data pread;             // FLASH read pointer
+ 121          //  // unsigned char byte;
+ 122          //
+ 123          //// TX & RX FIFO buffer arrays
+ 124          //BYTE txBuffer[3];     //varible pkt length
+ 125          //
+ 126          ////BYTE xdata txBuffer[6];             // Fixed packet length: 1B payload
+ 127          ////BYTE rxBuffer[3];             // Max received packet length = 1B (All packets longer then 1 byte 
+ 128          //                                    // will not be put in the RX FIFO due to packet length filtering 
+ 129          ////BYTE rxBuffer1[3]; 
+ 130          //
+ 131          //   
+ 132          //BOOL packet_detected=FALSE;
+ 133          //
+ 134          ////UINT8 save0=0x36;
+ 135          ////UINT8 save1=0x56;
+ 136          //BYTE lock_byte_data =0xF9;
+ 137          //UINT8 i=0;
+ 138          //BOOL calibration_needed =FALSE;
+ 139          //UINT8 temp;
+ 140          //UINT8 temp1;
+ 141          //UINT8 temp2;
+ 142          //UINT8 state;
+ 143          //BOOL external_interrupt=FALSE;
+ 144          //BOOL toggle=FALSE;
+ 145          //BOOL tx_bell=FALSE;
+ 146          //UINT8 temp=0;
+ 147          //BOOL switch_value=TRUE;
+ 148          //UINT8 init_cnt=0;
+ 149          //BOOL init=TRUE;
+ 150          //BOOL switch_value1=FALSE;
+ 151          //BOOL switch_value2=FALSE;
+ 152          //BOOL switch_value3=FALSE;
+ 153          //UINT8  sw_count=0;
+ 154          //BYTE temp2;
+ 155          //UINT8 temp1;
+ 156          //BOOL done=FALSE;
+ 157          //BOOL  first=TRUE;
+ 158          //BOOL idle1=FALSE;
+ 159          ////--------------------
+ 160          ////-----------------------------------------------------------------------------------
+ 161          
+ 162          
+ 163          
+ 164          
+ 165          
+ 166          //-------------------------------------------------------------------------------------------------------
+ 167          // Function declarations
+ 168          //void initTransmitter(void);
+ 169          void runTransmitter(void);
+ 170          //void FLASH_ByteWrite(FLADDR addr, char byte);
+ 171          //void initReceiver(void);
+ 172          void runReceiver(void);
+ 173          //BOOL ReceivePacket(BYTE *rxBuffer, UINT8 *length);
+ 174          void  SendPacket(BYTE *txBuffer, UINT8 size) ;
+ 175          void POWER_UP_RESET1_CCxxx0() ;
+ 176          void RESET1_CCxxx0() ;
+ 177          BYTE halSpiReadStatus(BYTE addr) ;
+C51 COMPILER V8.12   WOR                                                                   05/10/2018 12:31:22 PAGE 4   
+
+ 178          void halSpiStrobe(BYTE strobe) ;
+ 179            void halSpiWriteReg(BYTE addr, BYTE value) ;
+ 180           void halSpiWriteBurstReg(BYTE addr, BYTE *buffer, BYTE count) ;
+ 181          //-------------------------------------------------------------------------------------------------------
+ 182          
+ 183          
+ 184          //Letter Tables
+ 185          UINT8 table_blank[] = {0,0,0,0,0, 0,0,0,0,0, 0,0,0,0,0};
+ 186          int table_A[] = {0,1,1,1,1, 1,0,1,0,0, 0,1,1,1,1};
+ 187          int table_B[] = {1,1,1,1,1, 1,0,1,0,1, 0,1,0,1,0};
+ 188          int table_C[] = {0,1,1,1,0, 1,0,0,0,1, 1,0,0,0,1};
+ 189          int table_D[] = {1,1,1,1,1, 1,0,0,0,1, 0,1,1,1,0};
+ 190          int table_E[] = {1,1,1,1,1, 1,0,1,0,1, 1,0,1,0,1};
+ 191          int table_F[] = {1,1,1,1,1, 1,0,1,0,0, 1,0,1,0,0};
+ 192          int table_G[] = {0,1,1,1,0, 1,0,1,0,1, 0,0,1,1,0};
+ 193          int table_H[] = {1,1,1,1,1, 0,0,1,0,0, 1,1,1,1,1};
+ 194          int table_I[] = {0,0,0,0,1, 1,0,1,1,1, 0,0,0,0,1};
+ 195          int table_J[] = {1,0,0,0,0, 1,0,0,0,1, 1,1,1,1,1};
+ 196          int table_K[] = {1,1,1,1,1, 0,0,1,0,0, 0,1,0,1,1};
+ 197          int table_L[] = {1,1,1,1,1, 0,0,0,0,1, 0,0,0,0,1};
+ 198          int table_M[] = {1,1,1,1,1, 0,1,1,0,0, 0,1,1,1,1};
+ 199          int table_N[] = {1,1,1,1,1, 1,0,0,0,0, 0,1,1,1,1};
+ 200          int table_O[] = {0,1,1,1,0, 1,0,0,0,1, 0,1,1,1,0};
+ 201          int table_P[] = {1,1,1,1,1, 1,0,1,0,0, 0,1,0,0,0};
+ 202          int table_Q[] = {0,1,1,1,1, 1,0,0,1,1, 0,1,1,1,1};
+ 203          int table_R[] = {1,1,1,1,1, 1,0,1,0,0, 0,1,0,1,1};
+ 204          int table_S[] = {0,1,0,0,1, 1,0,1,0,1, 1,0,0,1,0};
+ 205          int table_T[] = {1,0,0,0,0, 1,1,1,1,1, 1,0,0,0,0};
+ 206          int table_U[] = {1,1,1,1,1, 0,0,0,0,1, 1,1,1,1,1};
+ 207          int table_V[] = {1,1,1,1,0, 0,0,0,0,1, 1,1,1,1,0};
+ 208          int table_W[] = {1,1,1,1,0, 0,0,1,1,0, 1,1,1,1,0};
+ 209          int table_X[] = {1,1,0,1,1, 0,0,1,0,0, 1,1,0,1,1};
+ 210          int table_Y[] = {1,1,0,0,0, 0,0,1,0,0, 1,1,1,1,1};
+ 211          int table_Z[] = {1,0,0,1,1, 1,0,1,0,1, 1,1,0,0,1};
+ 212          int table_1[];
+ 213          int table_2[];
+ 214          int table_3[];
+ 215          int table_4[];
+ 216          int table_5[];
+ 217          int table_six[];
+ 218          int table_seven[];
+ 219          int table_eight[];
+ 220          int table_nine[];
+ 221          int table_zero[];
+ 222          
+ 223          void delay(UINT8 delay){ // 8bit, 2^8  = 256 * Clock Time
+ 224   1              while(delay--);
+ 225   1      }
+ 226          
+ 227          UINT8 dot_time = 3;
+ 228          
+ 229          void setup(){
+ 230   1                
+ 231   1              P0MDIN  = 0xFF; 
+ 232   1              P1MDIN  = 0xFF; 
+ 233   1      
+ 234   1              XBR1 = 0x40;
+ 235   1              P1MDIN  = 0x00;
+ 236   1              P1MDOUT = 0xFF;
+ 237   1      
+ 238   1              P1SKIP = 0x00;          
+ 239   1              
+C51 COMPILER V8.12   WOR                                                                   05/10/2018 12:31:22 PAGE 5   
+
+ 240   1              P1 = 0x02; // 0000 0010 
+ 241   1      }
+ 242          
+ 243          void print_letter(int* current_status, int phase){
+ 244   1              P0 = current_status[phase];
+ 245   1      }
+ 246          
+ 247          int temp_phase=0;
+ 248          int* status_table[12]={table_A,table_A,table_A,table_A,table_A,table_A,table_A,table_A,table_A,table_A,tab
+             -le_A,table_A,};
+ 249          void get_current_status(int** phase){
+ 250   1      
+ 251   1              if(temp_phase==12) temp_phase=0;
+ 252   1              phase = status_table[temp_phase];
+*** WARNING C182 IN LINE 252 OF WOR.C: pointer to different objects
+ 253   1      }
+ 254          
+ 255          void loop(){
+ 256   1              int* current_status;
+ 257   1              int phase;
+ 258   1              while (1){
+ 259   2                      get_current_status(&current_status);
+ 260   2                      for(phase=0;phase<3;phase++){
+ 261   3                              print_letter(current_status,phase);
+ 262   3                              delay(dot_time);
+ 263   3                      }
+ 264   2              }
+ 265   1      }
+ 266          
+ 267          
+ 268          //-------------------------------------------------------------------------------------------------------
+ 269          //  void main(void)
+ 270          //
+ 271          //  DESCRIPTION:
+ 272          //      This function takes care of all the MCU initialization and the radio settings which is common
+ 273          //      for both the receiver and the transmitter.
+ 274          //-------------------------------------------------------------------------------------------------------
+ 275          void main (void) {
+ 276   1       
+ 277   1      
+ 278   1          #ifdef STAND_ALONE
+ 279   1      
+ 280   1              // Select the Internal Oscillator as Multiplier input source and disable the watchdog timer
+ 281   1                                                                      OSCICN = 0x83;
+ 282   1                              CLKSEL=0x00;    
+ 283   1                              OSCLCN = 0x00; 
+ 284   1              
+ 285   1              
+ 286   1          #endif
+ 287   1              setup();
+ 288   1              loop();                  
+ 289   1              
+ 290   1      }
+ 291          //
+ 292          //      XBR0 = BM_SPI0E | BM_URT0E;
+ 293          //
+ 294          //    XBR1= BM_XBAR ;
+ 295          //
+ 296          //    P0SKIP = GDO0_ | GDO2_;    // *************     //define 부분도 추가
+ 297          ////    P1SKIP = 0x02; 
+ 298          //
+ 299          //
+C51 COMPILER V8.12   WOR                                                                   05/10/2018 12:31:22 PAGE 6   
+
+ 300          //      // watchdog timer disable
+ 301          //    PCA0MD &= (~WTE_); 
+ 302          //
+ 303          ////              while(1);
+ 304          //              
+ 305          //
+ 306          //              
+ 307          ////     RSTSRC &=0xEF;         //software reset
+ 308          //                      halSetupTimer01(TIMER_1, SYSCLK_DIV_1, MODE_1, INT_OFF);
+ 309          //                      halSetupTimer01(TIMER_0, SYSCLK_DIV_1, MODE_1, INT_OFF);
+ 310          //      //                      halSetupTimer23(TIMER_2, SYSCLK_DIV_1, MODE_1, INT_OFF);
+ 311          //      //                      halSetupTimer23(TIMER_3, SYSCLK_DIV_1, MODE_1, INT_OFF);
+ 312          //                              TMR2H=0x00;
+ 313          //                      TMR2L=0xEC;
+ 314          //                      TR2=0;
+ 315          //    
+ 316          //
+ 317          //      
+ 318          //
+ 319          //                        
+ 320          //      
+ 321          //      P0MDIN=0xFF;
+ 322          //      P1MDIN=0x00;
+ 323          //      P0MDOUT =SCLK_ | SI_ | CSn_;
+ 324          //      P1MDOUT   = 0x00;
+ 325          //
+ 326          //
+ 327          //
+ 328          //
+ 329          //        
+ 330          //      SPI0CFG = BM_MSTEN; 
+ 331          //    SPI0CN = BM_NSSMD1;
+ 332          //    SPI0CKR   = 0x05; 
+ 333          //  // P0_1=1;
+ 334          //    SPI_ENABLE(); 
+ 335          //
+ 336          //
+ 337          //
+ 338          //    // Reset CC2500 and write RF settings to config registers
+ 339          // //   POWER_UP_RESET_CCxxx0();
+ 340          //                
+ 341          //
+ 342          //       POWER_UP_RESET_CCxxx0();
+ 343          //
+ 344          //    // Write register settings
+ 345          //    halSpiWriteReg(CCxxx0_FSCTRL1,  0x07);
+ 346          //    halSpiWriteReg(CCxxx0_FSCTRL0,  0x00);
+ 347          //  //  halSpiWriteReg(CCxxx0_FREQ2,    0x5C);
+ 348          //  //  halSpiWriteReg(CCxxx0_FREQ1,    0xC4);
+ 349          //  //  halSpiWriteReg(CCxxx0_FREQ0,    0xEC);
+ 350          //          halSpiWriteReg(CCxxx0_FREQ2,    0x5D);
+ 351          //    halSpiWriteReg(CCxxx0_FREQ1,    0x31);
+ 352          //    halSpiWriteReg(CCxxx0_FREQ0,    0x3B);
+ 353          //   //    halSpiWriteReg(CCxxx0_FREQ2,    0x5D);
+ 354          //  //  halSpiWriteReg(CCxxx0_FREQ1,    0x31);
+ 355          //  //  halSpiWriteReg(CCxxx0_FREQ0,    0x3B);
+ 356          //
+ 357          // //   halSpiWriteReg(CCxxx0_MDMCFG4,  0x2D);
+ 358          //    halSpiWriteReg(CCxxx0_MDMCFG4,  0x2D);
+ 359          // //   halSpiWriteReg(CCxxx0_MDMCFG3,  0x6B);
+ 360          //        halSpiWriteReg(CCxxx0_MDMCFG3,  0x3B);
+ 361          ////    halSpiWriteReg(CCxxx0_MDMCFG2,  0x73);
+C51 COMPILER V8.12   WOR                                                                   05/10/2018 12:31:22 PAGE 7   
+
+ 362          //      halSpiWriteReg(CCxxx0_MDMCFG2,  0x73);
+ 363          //    halSpiWriteReg(CCxxx0_DEVIATN,  0x00);
+ 364          //    halSpiWriteReg(CCxxx0_FREND1,   0xB6);
+ 365          //      halSpiWriteReg(CCxxx0_FREND0,   0x10);
+ 366          // //   halSpiWriteReg(CCxxx0_MCSM1 ,   0x01);
+ 367          //    halSpiWriteReg(CCxxx0_MCSM0 ,   0x08);                      //
+ 368          //    halSpiWriteReg(CCxxx0_FOCCFG,   0x1D);
+ 369          //    halSpiWriteReg(CCxxx0_BSCFG,    0x1C);
+ 370          //    halSpiWriteReg(CCxxx0_AGCCTRL2, 0xC7);
+ 371          //      halSpiWriteReg(CCxxx0_AGCCTRL1, 0x00);
+ 372          //   halSpiWriteReg(CCxxx0_AGCCTRL0, 0xB2);
+ 373          //    halSpiWriteReg(CCxxx0_FSCAL3,   0xEA);
+ 374          //      halSpiWriteReg(CCxxx0_FSCAL1,   0x00);
+ 375          //    halSpiWriteReg(CCxxx0_FSCAL0,   0x11);
+ 376          //      halSpiWriteReg(CCxxx0_IOCFG2,   0x06);
+ 377          //    halSpiWriteReg(CCxxx0_IOCFG0,   0x06);    
+ 378          //
+ 379          //   halSpiWriteReg(CCxxx0_CHANNR,   channel_no); 
+ 380          //    halSpiWriteReg(CCxxx0_PATABLE, 0xC0);
+ 381          //      halSpiWriteReg(CCxxx0_PATABLE, 0xFF);
+ 382          //                                       halSpiStrobe(CCxxx0_SIDLE);
+ 383          //                       halSpiStrobe(CCxxx0_SPWD);
+ 384          //
+ 385          //                 P0MDIN=0xFF;
+ 386          //                  P1MDIN=0x00;
+ 387          //      P1=0x00;
+ 388          //      
+ 389          //        P0=0x48;
+ 390          //       
+ 391          //              
+ 392          //      P1MDOUT=0x00;
+ 393          //      P0MDOUT=0x00;
+ 394          //      CR=0;   
+ 395          //
+ 396          //
+ 397          //                                              ENABLE_GLOBAL_INT(INT_ON);
+ 398          //                                                      SETUP_GDO2_INT(EDGE, LOW);                  // Enables external interrupt on low edge
+ 399          //              INT_SETFLAG(INUM_EXTERNAL1, INT_CLR);       // Clears the interrupt flag
+ 400          //                      INT_ENABLE(INUM_EXTERNAL1, INT_ON); 
+ 401          //
+ 402          //      //        while(1);
+ 403          //         /*    
+ 404          //              temp_first= first_entered;
+ 405          //                        
+ 406          //
+ 407          //              if(temp_first!= temp33  ){
+ 408          //                              OSCLCN = 0x80;
+ 409          //                      CLKSEL=0x02;
+ 410          //                      OSCICN = 0x00;
+ 411          //      
+ 412          //              PCON =PCON | 0x01;       
+ 413          //              PCON =PCON | 0x01;
+ 414          //
+ 415          //              
+ 416          //                                
+ 417          //      
+ 418          //      
+ 419          //                              halWait(100);
+ 420          //                              PSCTL |= 0x01;
+ 421          //                              PSCTL &= 0xFD;
+ 422          //                              FLKEY = 0xA5;
+ 423          //                              FLKEY= 0xF1;
+C51 COMPILER V8.12   WOR                                                                   05/10/2018 12:31:22 PAGE 8   
+
+ 424          //                              *ptr_first_entered =0x33 ;               //Not first entered
+ 425          //                              PSCTL &= 0xFE;
+ 426          //
+ 427          //      
+ 428          //
+ 429          //      
+ 430          //      
+ 431          //
+ 432          //                       
+ 433          //              
+ 434          //                              halWait(100);
+ 435          //                              PSCTL |= 0x01;
+ 436          //                              PSCTL &= 0xFD;
+ 437          //                              FLKEY = 0xA5;
+ 438          //                              FLKEY= 0xF1;
+ 439          //                      
+ 440          //                              *ptr_lock_byte =0xF9 ;           //Not first entered
+ 441          //                      
+ 442          //                              PSCTL &= 0xFE;
+ 443          //                              
+ 444          //       }
+ 445          //       */
+ 446          //
+ 447          ////     ENABLE_GLOBAL_INT(INT_OFF);
+ 448          //
+ 449          //
+ 450          //                      P0MDIN=0xFF;
+ 451          //      P1MDIN=0x00;
+ 452          //      P0MDOUT =SCLK_ | SI_ | CSn_;
+ 453          //      P1MDOUT   = 0x00;
+ 454          //
+ 455          //              INT_ENABLE(INUM_TIMER1, INT_ON); 
+ 456          //      INT_ENABLE(INUM_TIMER0, INT_ON); 
+ 457          //                       
+ 458          //
+ 459          //                       
+ 460          //
+ 461          //                      
+ 462          //                      
+ 463          //    // Calibrating frequency synthesizer (FS) at startup
+ 464          //    halSpiStrobe(CCxxx0_SCAL);
+ 465          ////    RSTSRC |=0x04;     //missing clock detector reset enable
+ 466          //              
+ 467          //
+ 468          //          halSpiWriteReg(CCxxx0_PKTCTRL1, 0x08);
+ 469          //      halSpiWriteReg(CCxxx0_PKTCTRL0, 0x44);
+ 470          //                halSpiWriteReg(CCxxx0_PKTLEN,   0x03);
+ 471          //                                      halSpiWriteReg(CCxxx0_SYNC0,save0);               //make 2 Byte ID code  as 2 Sync Bytes
+ 472          //              halSpiWriteReg(CCxxx0_SYNC1,save0);
+ 473          //
+ 474          //                                      INT_ENABLE(INUM_TIMER1, INT_OFF); 
+ 475          //              TR1=0;
+ 476          //                                                                
+ 477          //                                      TR2=0;
+ 478          //              
+ 479          //                 INT_ENABLE(INUM_TIMER1, INT_ON); 
+ 480          //
+ 481          //
+ 482          //
+ 483          //                                              INT_ENABLE(INUM_EXTERNAL1, INT_OFF);  
+ 484          //      //        ENABLE_GLOBAL_INT(INT_OFF);
+ 485          //       L1:    
+C51 COMPILER V8.12   WOR                                                                   05/10/2018 12:31:22 PAGE 9   
+
+ 486          //
+ 487          //                      P0MDIN=0xFF;
+ 488          //                      P1MDIN=0xFF;
+ 489          //                      P0MDOUT =SCLK_ | SI_ | CSn_;
+ 490          //
+ 491          //                                      
+ 492          //                                      
+ 493          //                              P1=0x00F;       
+ 494          //                        P0 = 0xFF;
+ 495          ////                    P1MDOUT=0xFF;
+ 496          ////            P1SKIP=0xFF;
+ 497          ////             P1=0x10;
+ 498          //                         SPI0CKR   = 0x01; 
+ 499          //
+ 500          //                      OSCLCN = 0x80;
+ 501          //                      CLKSEL=0x02;    
+ 502          //                      OSCICN = 0x00;
+ 503          //
+ 504          //                              OSCICN = 0x83;
+ 505          //                      CLKSEL=0x00;    
+ 506          //                      OSCLCN = 0x00; 
+ 507          //                      /*
+ 508          //      NSSMD0 = 0;
+ 509          //
+ 510          //    while (P0_1);
+ 511          //    SPI0DAT =CCxxx0_SIDLE;
+ 512          //
+ 513          //    SPI_WAIT();
+ 514          //    NSSMD0 = 1;
+ 515          //      */
+ 516          //                       halSpiStrobe(CCxxx0_SIDLE);
+ 517          //
+ 518          //                        
+ 519          //
+ 520          //        
+ 521          //                      
+ 522          //
+ 523          //      
+ 524          //      
+ 525          //
+ 526          //
+ 527          //
+ 528          //      
+ 529          //       
+ 530          //
+ 531          //
+ 532          ////     halSpiStrobe(CCxxx0_SFTX);
+ 533          ////                    while(1);
+ 534          //
+ 535          //      halSpiWriteBurstReg(CCxxx0_TXFIFO, txBuffer,1);
+ 536          //
+ 537          //       
+ 538          //
+ 539          //       //      halSpiStrobe(CCxxx0_SCAL);              //to supply steady TX output power
+ 540          //      //              halSpiStrobe(CCxxx0_SIDLE);
+ 541          //      /*
+ 542          //                  NSSMD0 = 0;
+ 543          //
+ 544          //    while (P0_1);
+ 545          //    SPI0DAT = CCxxx0_STX;
+ 546          //    SPI_WAIT();
+ 547          //    NSSMD0 = 1;
+C51 COMPILER V8.12   WOR                                                                   05/10/2018 12:31:22 PAGE 10  
+
+ 548          //      */
+ 549          //         halSpiStrobe(CCxxx0_STX);
+ 550          ////              ENABLE_GLOBAL_INT(INT_ON);
+ 551          //
+ 552          //              INT_ENABLE(INUM_EXTERNAL1, INT_ON); 
+ 553          //               
+ 554          //      //              temp2=halSpiReadReg(CCxxx0_SYNC0);
+ 555          //      //               while(1);      
+ 556          //
+ 557          //                      OSCLCN = 0x83;
+ 558          //                      CLKSEL=0x02;
+ 559          //                      OSCICN = 0x00;                    
+ 560          //       //             halSpiStrobe(CCxxx0_SIDLE);
+ 561          //      //        while(!packet_detected);
+ 562          //                      /*
+ 563          //                      OSCICN = 0x83;
+ 564          //                      CLKSEL=0x00;
+ 565          //                      OSCLCN = 0x00;
+ 566          //
+ 567          //                 */
+ 568          // 
+ 569          //
+ 570          //               //     TH1 = 0xB9;                                             //900 ms        Interval
+ 571          //      //      TL1 = 0xB0;
+ 572          //
+ 573          //                      
+ 574          //                         INT_ENABLE(INUM_TIMER1, INT_ON); 
+ 575          //                      INT_ENABLE(INUM_EXTERNAL1, INT_OFF);  
+ 576          //      //        ENABLE_GLOBAL_INT(INT_OFF);
+ 577          //
+ 578          //      //                ENABLE_GLOBAL_INT(INT_ON);
+ 579          //              //                      if( sw_count < 3 &&      TMR2H > 0x50 ) sw_count=0;
+ 580          //                              
+ 581          //                                                                                      //              P1MDOUT=0xFF;
+ 582          //      //      P1SKIP=0xFF;
+ 583          //      //       P1&=~0x10;
+ 584          //
+ 585          //                                                external_interrupt=FALSE;
+ 586          //                                      
+ 587          //
+ 588          //
+ 589          //                                      TH1 = 0xE0;                                             //900 ms        Interval
+ 590          //                              TL1 = 0xB0; 
+ 591          //                      
+ 592          //              
+ 593          //                                      TR0=0;
+ 594          //                                                      halSpiStrobe(CCxxx0_SIDLE);
+ 595          //      //                              temp1=halSpiReadStatus(CCxxx0_MARCSTATE);
+ 596          //      
+ 597          //              halSpiStrobe(CCxxx0_SPWD);
+ 598          //                                                                              P1MDOUT=0x00;
+ 599          //                                      P0MDOUT=0x00;
+ 600          //                                      
+ 601          //                                      P0MDIN=0xFF;
+ 602          //                                              P1MDIN=0x00;    
+ 603          //              
+ 604          //                                      P0=0x48;
+ 605          //                                      P1SKIP=0x00;      
+ 606          //                                      P1=0x00;
+ 607          //
+ 608          //                      //              }
+ 609          //                                      CR=0;   
+C51 COMPILER V8.12   WOR                                                                   05/10/2018 12:31:22 PAGE 11  
+
+ 610          //      
+ 611          //              //      NSSMD0=1;
+ 612          //                      OSCLCN = 0x80;
+ 613          //                      CLKSEL=0x02;
+ 614          //                      OSCICN = 0x00;
+ 615          //              
+ 616          //                               //     if( external_interrupt)                  TMR3CN |=0x04; 
+ 617          //
+ 618          //
+ 619          //
+ 620          //      //              TR2=1;
+ 621          //                      TR1=1;
+ 622          //                      //      INT_ENABLE(INUM_EXTERNAL1, INT_ON);  
+ 623          //
+ 624          //                              PCON =PCON | 0x01;
+ 625          //
+ 626          //              
+ 627          //
+ 628          //               
+ 629          //                              goto L1;
+ 630          // //   }
+ 631          //}// Main
+ 632          //
+ 633          //
+ 634          //
+ 635          //
+ 636          //
+ 637          // 
+ 638          ////------------------------------------------------------------------------------------------------------
+             --
+ 639          ////  void TIMER1_ISR(void)
+ 640          ////
+ 641          ////  DESCRIPTION:
+ 642          ////      This interrupt occurs every 1000 us on the transmitter unit. The timer
+ 643          ////      registers are reloaded and a packet is sent.
+ 644          ////------------------------------------------------------------------------------------------------------
+             --
+ 645          //void TIMER1_ISR(void) interrupt INUM_TIMER1 {
+ 646          //
+ 647          //      
+ 648          //                      PCON =PCON & 0xFE;
+ 649          //              //      RSTSRC |=0x10;
+ 650          //}// TIMER1_ISR
+ 651          ///*
+ 652          //void TIMER2_ISR(void) interrupt INUM_TIMER2{
+ 653          //
+ 654          //      
+ 655          //               //     PCON =PCON & 0xFE;
+ 656          //              //      if( sw_count < 3 &&      TMR2H > 0x30 ) sw_count=0;
+ 657          //
+ 658          //}// TIMER1_ISR
+ 659          // */ 
+ 660          //
+ 661          ////------------------------------------------------------------------------------------------------------
+             --
+ 662          ////  void EXTERNAL1_ISR(void)
+ 663          ////
+ 664          ////  DESCRIPTION:
+ 665          ////      This interrupt service routine occurs whenever the radio detects a packet using Wake-on-Radio
+ 666          ////------------------------------------------------------------------------------------------------------
+             --
+ 667          //void EXTERNAL1_ISR(void) interrupt INUM_EXTERNAL1{
+C51 COMPILER V8.12   WOR                                                                   05/10/2018 12:31:22 PAGE 12  
+
+ 668          //   
+ 669          //      packet_detected=TRUE;
+ 670          //
+ 671          //
+ 672          //    INT_SETFLAG(INUM_EXTERNAL1, INT_CLR);   // Clear interrupt flag
+ 673          // 
+ 674          //
+ 675          //
+ 676          //}// EXTERNAL1_ISR
+ 677          //
+ 678          //
+ 679          //  /*
+ 680          //void FLASH_ByteWrite (FLADDR addr, char byte)
+ 681          //{
+ 682          //   bit EA_SAVE = EA;                   // preserve EA
+ 683          //   char xdata * data pwrite;           // FLASH write pointer
+ 684          //
+ 685          //   EA = 0;                             // disable interrupts
+ 686          //
+ 687          //   // change clock speed to slow, then restore later
+ 688          //
+ 689          //   VDM0CN = 0x80;                      // enable VDD monitor
+ 690          //
+ 691          //
+ 692          //   RSTSRC = 0x02;                      // enable VDD monitor as a reset source
+ 693          //
+ 694          //   pwrite = (char xdata *) addr;
+ 695          //
+ 696          //   FLKEY  = 0xA5;                      // Key Sequence 1
+ 697          //   FLKEY  = 0xF1;                      // Key Sequence 2
+ 698          //   PSCTL |= 0x01;                      // PSWE = 1
+ 699          //
+ 700          //
+ 701          //   VDM0CN = 0x80;                      // enable VDD monitor
+ 702          //
+ 703          //
+ 704          //   RSTSRC = 0x02;                      // enable VDD monitor as a reset source
+ 705          //
+ 706          //   *pwrite = byte;                     // write the byte
+ 707          //
+ 708          //   PSCTL &= ~0x01;                     // PSWE = 0
+ 709          //
+ 710          //   EA = EA_SAVE;                       // restore interrupts
+ 711          //}
+ 712          //  */
+ 713          //  /*
+ 714          //void EXTERNAL0_ISR(void) interrupt INUM_EXTERNAL0{  
+ 715          //      ENABLE_GLOBAL_INT(INT_OFF);
+ 716          //      PCON =PCON & 0xFE;               //in the middle of waiting timer interrupt 
+ 717          ////    TR1=0;
+ 718          //                      //      external_interrupt=TRUE;
+ 719          //
+ 720          //                                      OSCLCN=0x80;  //10KHz
+ 721          //                              CLKSEL=0x02;
+ 722          //                              OSCICN=0x00;  //10KHz
+ 723          //                               
+ 724          //                                       TMR3CN |=0x04; 
+ 725          //
+ 726          //              P1=0xFF;
+ 727          //         P0MDIN=0xFF;
+ 728          //        if(P0_6)       P0=0xFF;
+ 729          //        P1MDIN=0xFF;
+C51 COMPILER V8.12   WOR                                                                   05/10/2018 12:31:22 PAGE 13  
+
+ 730          //        CR=1;
+ 731          //              //      TR0=0;
+ 732          //                      P1MDOUT   = 0x00;
+ 733          //              
+ 734          //              
+ 735          //                         PCA0MD |= 0x08;         //time base is sysclk =10KHz
+ 736          //                              PCA0CPH0 =2;
+ 737          //
+ 738          //
+ 739          //
+ 740          //        
+ 741          //              
+ 742          //                      
+ 743          //       external_interrupt=TRUE;       
+ 744          //
+ 745          //              first=TRUE;
+ 746          //                      
+ 747          //       
+ 748          //              halWait(5);     // 24 ms
+ 749          //
+ 750          //                         
+ 751          //      
+ 752          //  sw_count++;
+ 753          //
+ 754          //                      if(sw_count==1){
+ 755          //      
+ 756          //                      TMR3H=0x01;
+ 757          //                      TMR3L=0xEC;
+ 758          //                                                // normal timer mode1 as in timer1
+ 759          //                              //      INT_ENABLE(INUM_TIMER3, INT_ON); 
+ 760          //                              
+ 761          //
+ 762          //                       }
+ 763          //              
+ 764          //         temp1= TMR3H;
+ 765          //
+ 766          //         if(temp1>0xFE) temp1=0xFE;
+ 767          //      
+ 768          //                               if(  temp1 > 0x10 ){
+ 769          //                      
+ 770          //                      TMR3H=0x01;
+ 771          //                      TMR3L=0xEC;
+ 772          //                      if(sw_count==2){
+ 773          //                        sw_count=1;
+ 774          //
+ 775          //
+ 776          //                      }
+ 777          //                      else if  (sw_count==3){
+ 778          //                               sw_count=1;
+ 779          //
+ 780          //                      }
+ 781          //              }         
+ 782          //
+ 783          //               
+ 784          //              if(sw_count ==3 ){
+ 785          //                               
+ 786          //                               sw_count=0;
+ 787          //
+ 788          //                              
+ 789          //                              if(  temp1 < 0x10 ){
+ 790          //                                       halWait(400);
+ 791          //                                       
+C51 COMPILER V8.12   WOR                                                                   05/10/2018 12:31:22 PAGE 14  
+
+ 792          //                              P1MDOUT   = 0x03;
+ 793          //                                      CR=1;
+ 794          //                                      halWait(50);
+ 795          //                                      P1MDOUT   = 0x00;
+ 796          //                                      halWait(50);
+ 797          //                                      P1MDOUT   = 0x03;
+ 798          //                                      halWait(50);
+ 799          //                                      P1MDOUT   = 0x00;
+ 800          //                                  CR=0;
+ 801          //
+ 802          //
+ 803          //              //       if(packet_detected){                                                   // short pressing       
+ 804          //
+ 805          //                                                                                 // normal state
+ 806          //                                      P1=0xFF;
+ 807          //                              
+ 808          //                              
+ 809          //
+ 810          //                                      idle1=TRUE;
+ 811          //
+ 812          //                      
+ 813          //      
+ 814          //              
+ 815          //              }                       //timer
+ 816          //       
+ 817          //
+ 818          //              
+ 819          //      }       //  sw_count=3;
+ 820          //
+ 821          //
+ 822          ////    INT_ENABLE(INUM_EXTERNAL0, INT_OFF); 
+ 823          //
+ 824          //      //      TR1=1;  
+ 825          ////    }       
+ 826          //      INT_SETFLAG(INUM_EXTERNAL0, INT_CLR);   // Clear interrupt flag
+ 827          //
+ 828          //      ENABLE_GLOBAL_INT(INT_ON);      
+ 829          //              
+ 830          //
+ 831          //}// EXTERNAL0_ISR
+ 832          //
+ 833          //  */
+
+
+MODULE INFORMATION:   STATIC OVERLAYABLE
+   CODE SIZE        =    203    ----
+   CONSTANT SIZE    =     36    ----
+   XDATA SIZE       =    834       8
+   PDATA SIZE       =   ----    ----
+   DATA SIZE        =   ----    ----
+   IDATA SIZE       =   ----    ----
+   BIT SIZE         =   ----    ----
+   EDATA SIZE       =   ----    ----
+   HDATA SIZE       =   ----    ----
+   XDATA CONST SIZE =   ----    ----
+   FAR CONST SIZE   =   ----    ----
+END OF MODULE INFORMATION.
+
+
+C51 COMPILATION COMPLETE.  1 WARNING(S),  0 ERROR(S)

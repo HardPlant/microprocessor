@@ -1,0 +1,6 @@
+"..\..\..\..\..\LIB\Chipcon\srf04\ebsrf04.LIB",
+"..\..\..\..\..\LIB\Chipcon\srf04\halsrf04.LIB",
+".\objects\Wor.obj" 
+TO ".\objects\spi_2_4" 
+
+PRINT(".\listings\spi_2_4.map")

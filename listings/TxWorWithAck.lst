@@ -1,0 +1,520 @@
+C51 COMPILER V7.20   TXWORWITHACK                                                          03/07/2007 17:05:31 PAGE 1   
+
+
+C51 COMPILER V7.20, COMPILATION OF MODULE TXWORWITHACK
+OBJECT MODULE PLACED IN .\objects\TxWorWithAck.obj
+COMPILER INVOKED BY: C:\Keil\C51\BIN\C51.EXE TxWorWithAck.c OMF2 BROWSE INCDIR(..\..\..\..\..\Inc;..\..\..\..\..\lib) DE
+                    -FINE(FREQ_2_4,STAND_ALONE) DEBUG PRINT(.\listings\TxWorWithAck.lst) OBJECT(.\objects\TxWorWithAck.obj)
+
+line level    source
+
+   1          
+   2          
+   3          
+   4          /*******************************************************************************************************
+   5           *                                                                                                     *
+   6           *        **********                                                                                   *
+   7           *       ************                                                                                  *
+   8           *      ***        ***                                                                                 *
+   9           *      ***   +++   ***     This file contains all functions related to the transmitting unit          *  
+             -                                                                 *
+  10           *      ***   + +   ***     (remote control).                                                          *
+  11           *      ***   +                                                                                        *
+  12           *      ***   + +   ***                                                                                *
+  13           *      ***   +++   ***     TxWorWithAck.c                                                             *
+  14           *      ***        ***                                                                                 *
+  15           *       ************                                                                                  *
+  16           *        **********                                                                                   *
+  17           *                                                                                                     *
+  18           *******************************************************************************************************
+  19           * Compiler:                Keil C51 V7.50                                                             *
+  20           * Target platform:         Chipcon CCxxx0 (Silabs F320)                                               *
+  21           * Author:                  ESY                                                                        *
+  22           *******************************************************************************************************
+  23           * Revision history:        See end of file                                                            *
+  24           *******************************************************************************************************/
+  25          #include <Chipcon\srf04\regssrf04.h>
+  26          #include <Chipcon\srf04\halsrf04.h>
+  27          #include <Chipcon\srf04\ebsrf04.h>
+  28          #include <WorWithAck.h>
+  29          #include <stdlib.h>
+  30          
+  31          
+  32          
+  33          //-------------------------------------------------------------------------------------------------------
+  34          //  Defines
+  35          #define MAX_PACKET_BURST_TIMEOUT    950     // Maximum number of packets to send without receiving an 
+  36                                                      // ACK. Used as burst timeout to avoid endless packet 
+  37                                                      // bursting without getting any response.
+  38          #define RX_BYTES                    0x7F
+  39          //-------------------------------------------------------------------------------------------------------
+  40          
+  41          
+  42          
+  43          
+  44          //-------------------------------------------------------------------------------------------------------
+  45          //  Global Variables
+  46          
+  47          // Variables to control the outgoing packet burst
+  48          UINT32 packetsSent = 0;
+  49          UINT16 packetCount = 0;
+  50          UINT8 txBuffer[3];            // Fixed packet length: 1B data payload
+  51           UINT8 rxBuffer[3]; 
+  52          BOOL burstDone = FALSE;
+  53          BOOL ackReceived=FALSE;
+C51 COMPILER V7.20   TXWORWITHACK                                                          03/07/2007 17:05:31 PAGE 2   
+
+  54          int transaction_count;
+  55          BOOL timeout = FALSE;
+  56          UINT32 id= 0;
+  57          
+  58          
+  59          UINT8 Error_rec =0;
+  60          int rssi_dbm;
+  61          int rssi_dbm_off;
+  62          int rssi_input;
+  63          UINT8 prev_state;
+  64          UINT8 updated = FALSE;
+  65          
+  66          BOOL Link_Ok =FALSE;
+  67          BOOL packetReceived=FALSE;
+  68          
+  69          int thresh0 ;                   //RSSI rhreshold
+  70          int thresh1 ;
+  71          int th_min ;
+  72          int rssi_dbm_off ;
+  73          //-------------------------------------------------------------------------------------------------------
+  74          
+  75          
+  76          
+  77          
+  78          //-------------------------------------------------------------------------------------------------------
+  79          // Function declarations
+  80          void initTransmitter();             // internal function
+  81          void transactor(int transaction_count, BOOL enable) ;
+  82          //-------------------------------------------------------------------------------------------------------
+  83          
+  84          
+  85          
+  86          
+  87          //-------------------------------------------------------------------------------------------------------
+  88          //  void initTransmitter(void)
+  89          //
+  90          //  DESCRIPTION:
+  91          //      This function is configuring some specific radio register settings and initiating interrupt 
+  92          //      timers for the transmitter unit.
+  93          //-------------------------------------------------------------------------------------------------------
+  94          void initTransmitter(void) {
+  95   1      
+  96   1          // Enable automatic switching after packet has been sent to listen for incoming ACK.
+  97   1          // TXOFF_MODE = RX (TX->RX switch: 21.5 us), RXOFF_MODE = IDLE (RX->IDLE, no FS calib: 0.1 us) 
+  98   1          halSpiWriteReg(CCxxx0_MCSM1, 0x33);
+  99   1      
+ 100   1          // Set RX timeout (timeout for sync word search)) to 325 us.
+ 101   1          // WOR_RES = 0, (default value; Gives high time resolution/short periods)
+ 102   1          // Enable RC oscillator calibration. 
+ 103   1          halSpiWriteReg(CCxxx0_WORCTRL, 0x78);
+ 104   1          halSpiWriteReg(CCxxx0_MCSM2, 0x05);                                 // RX_TIME = 101b
+ 105   1                      
+ 106   1      
+ 107   1          // T_rxtime = EVENT0 * C = 325 us
+ 108   1          // If RX_TIEM is set to 5, C = 0.1127  
+ 109   1          // =>  EVENT0 = 2884 = 0x0B44                                       , Assuming f_xosc = 26 MHz        
+             -                                                               
+ 110   1          halSpiWriteReg(CCxxx0_WOREVT1, 0x0B);
+ 111   1          halSpiWriteReg(CCxxx0_WOREVT0, 0x44);
+ 112   1      
+ 113   1          // Setup TIMER1 to overflow every 1000 us (TX packet interval)
+ 114   1          // 1/6000000 Hz * x = 1000 us,                                      , SYSCLK_DIV_4 = 24 MHz/4 = 6 MHz
+C51 COMPILER V7.20   TXWORWITHACK                                                          03/07/2007 17:05:31 PAGE 3   
+
+ 115   1          // => x = 6000
+ 116   1          // 2^16 - 6000 = 59536 = 0xE890                                     , 16 bits timer register
+ 117   1          // => TH1 = 0xE8
+ 118   1          // => TL1 = 0x90
+ 119   1          TH1 = 0xE8;                                                         // Timer1 high byte
+ 120   1          TL1 = 0x90;                                                         // Timer1 low byte
+ 121   1      
+ 122   1          // Clock source: 6 MHz, Mode: 16-bits timer; Initiated with interrupts off.
+ 123   1          halSetupTimer01(TIMER_1, SYSCLK_DIV_4, MODE_1, INT_OFF);
+ 124   1          halSetupTimer01(TIMER_0, SYSCLK_DIV_48, MODE_1, INT_OFF);
+ 125   1      
+ 126   1          // Enable EXTERNAL0 interrupt on low edge of GDO2 pin (used for incoming packets)
+ 127   1          // CCxxx0_IOCFG1 == 0x06 => GDO0 asserts on sync word detection and de-asserts on packet end.
+ 128   1          ENABLE_GLOBAL_INT(INT_OFF);         // Got to globally disable interrupts because ...
+ 129   1          SETUP_GDO0_INT(EDGE, LOW);          // <-- this macro enables the new interrupt upon initialization ..
+             -.
+ 130   1          INT_ENABLE(INUM_EXTERNAL0, INT_OFF);// and then got to disable it ...
+ 131   1          ENABLE_GLOBAL_INT(INT_ON);          // before interrupts can be globally re-enabled again
+ 132   1      } // initTransmitter
+ 133          
+ 134          
+ 135          
+ 136          
+ 137          //-------------------------------------------------------------------------------------------------------
+ 138          //  void runTransmitter(void)
+ 139          //
+ 140          //  DESCRIPTION:
+ 141          //      This function loops forever and transmits packet bursts upon joystick movements: 
+ 142          //      Identical packet will be transmitted until an ACK packet has been received.
+ 143          //-------------------------------------------------------------------------------------------------------
+ 144          void runTransmitter(void) {
+ 145   1              BYTE temp;
+ 146   1              UINT32 id1;
+ 147   1      
+ 148   1          // Perform initalization specific for transmitting unit.
+ 149   1          initTransmitter();
+ 150   1      
+ 151   1              thresh0 =-60;                   //RSSI rhreshold
+ 152   1              thresh1 =-90;
+ 153   1              th_min =-30;
+ 154   1              rssi_dbm_off = 72;
+ 155   1                        ENABLE_GLOBAL_INT(INT_ON);
+ 156   1          INT_ENABLE(INUM_TIMER1, INT_OFF);
+ 157   1                  // Calibrates the RC osc manually (721 us) in case of long time since last 
+ 158   1                  // calibration/joystick movement
+ 159   1                  halSpiStrobe(CCxxx0_SCAL);
+ 160   1      
+ 161   1       
+ 162   1      //            packetCount = 0;            // Reset counter before stating a new burst
+ 163   1      
+ 164   1                  halWait(800);               // Wait for calibration to finish before packet burst can start
+ 165   1          
+ 166   1                                          // Load timer0 registers (see  ini
+ 167   1      
+ 168   1              
+ 169   1          // Loops forever, sending packets upon joystick movement. Press S1 to abort.
+ 170   1          while(!ebButtonPushed()) {
+ 171   2              // NOTE! If the receiver receives one of the first packets in the burst and hence the burtDone
+ 172   2              // flag is set not long after the ebLcdUpdate("Bursting...", NULL); function was called, the LCD
+ 173   2              // will not be updated with the message below as the previous message is still being written to 
+ 174   2              // the display.
+ 175   2                       while(!ebButtonPushed()) {                             
+C51 COMPILER V7.20   TXWORWITHACK                                                          03/07/2007 17:05:31 PAGE 4   
+
+ 176   3                              id = rand();
+ 177   3                              id1 = rand();
+ 178   3                              }
+ 179   2                  
+ 180   2                  
+ 181   2          // Write custom sync word (avoiding default sync word)
+ 182   2                          halSpiWriteReg(CCxxx0_SYNC1, 0x9B);
+ 183   2                      halSpiWriteReg(CCxxx0_SYNC0, 0xAD);
+ 184   2          
+ 185   2      
+ 186   2                               txBuffer[0] = id;
+ 187   2                               temp=  txBuffer[0];
+ 188   2                               transactor(1,INT_ON);
+ 189   2                               txBuffer[0] = id>>8;
+ 190   2                               transactor(1,INT_ON);
+ 191   2      
+ 192   2                               halSpiWriteReg(CCxxx0_SYNC0,temp);      //write Randoam Sync word which is part of id code
+ 193   2                               halSpiWriteReg(CCxxx0_SYNC1,txBuffer[0]);
+ 194   2      
+ 195   2      //                       txBuffer[0] = id>>16;
+ 196   2                               txBuffer[0] = id1;
+ 197   2                               transactor(1,INT_ON);
+ 198   2      
+ 199   2                      while( !ebButtonPushed()) {
+ 200   3      
+ 201   3                               transactor(1,INT_ON);
+ 202   3                               runReceiver();
+ 203   3                       }
+ 204   2      
+ 205   2      
+ 206   2         }
+ 207   1      
+ 208   1      
+ 209   1      }// runTransmitter
+ 210          
+ 211          
+ 212          void transactor(int transaction_count, BOOL enable) {
+ 213   1      
+ 214   1              TH1 = 0xE8;
+ 215   1          TL1 = 0x90;
+ 216   1              INT_ENABLE(INUM_TIMER1,INT_ON );
+ 217   1      
+ 218   1              while( transaction_count>0){
+ 219   2              
+ 220   2                       packetCount = 0;            // Reset counter before stating a new burst
+ 221   2      
+ 222   2               while(!burstDone);
+ 223   2                       burstDone=FALSE;
+ 224   2                      transaction_count--;
+ 225   2      
+ 226   2                      TH0 = 0xE8;
+ 227   2                      TL0 = 0x90; // this gives interval of 1000*12 u         
+ 228   2                      INT_ENABLE(INUM_TIMER0, enable); 
+ 229   2              }
+ 230   1      
+ 231   1               INT_ENABLE(INUM_TIMER1, INT_OFF);
+ 232   1              INT_ENABLE(INUM_TIMER0, INT_OFF); 
+ 233   1      }
+ 234          
+ 235          
+ 236          
+ 237          void runReceiver(void) {
+C51 COMPILER V7.20   TXWORWITHACK                                                          03/07/2007 17:05:31 PAGE 5   
+
+ 238   1      
+ 239   1      
+ 240   1              ENABLE_GLOBAL_INT(INT_ON);
+ 241   1      
+ 242   1                                        //Prevent WOR Bursting from Timer1
+ 243   1      
+ 244   1         
+ 245   1      
+ 246   1      //       INT_ENABLE(INUM_EXTERNAL0, INT_OFF);// and then got to disable it ...
+ 247   1          // Loops forever Receiving the ID number from Transmitter every Fixed Time Period (Timer0)
+ 248   1          if(ackReceived)  {
+ 249   2      
+ 250   2                      ackReceived =FALSE;             
+ 251   2                               
+ 252   2      
+ 253   2                              if(rxBuffer[0] == txBuffer[0]^0xFF   )
+ 254   2                              {
+ 255   3                              Link_Ok =TRUE;
+ 256   3                              P_LED3 =~P_LED3;   //yellow LED
+ 257   3                              rxBuffer[0]=0;
+ 258   3      
+ 259   3                              }
+ 260   2                              else
+ 261   2                              {
+ 262   3                              Link_Ok =TRUE;
+ 263   3      
+ 264   3                              }
+ 265   2      
+ 266   2                              if(Link_Ok)
+ 267   2                              {
+ 268   3                              
+ 269   3                                      rssi_input = halSpiReadStatus(CCxxx0_RSSI) ;
+ 270   3                                      if(rssi_input >= 128){
+ 271   4                                      rssi_dbm=(rssi_input-256)/2 - rssi_dbm_off ;
+ 272   4                                      }
+ 273   3                                      else{
+ 274   4                                      rssi_dbm = rssi_input/2 - rssi_dbm_off;
+ 275   4                                      }
+ 276   3      
+ 277   3                                      CR =1;
+ 278   3      
+ 279   3                                      if(       rssi_dbm < th_min )
+ 280   3                                      {
+ 281   4                                                                 // alarm     (High Amplitude, very High Tone)                                
+ 282   4                                              if(prev_state !=0){
+ 283   5                                                      PCA0L = 0x3F;
+ 284   5                                                      PCA0H = 0x00;                           
+ 285   5                                              }
+ 286   4                                              prev_state =0;
+ 287   4                                      
+ 288   4                                      if(th_min < rssi_dbm < thresh0)
+ 289   4                                      {
+ 290   5                                                                 // (Medium Amplitude ,High tone )
+ 291   5                                              if(prev_state !=1){
+ 292   6                                              PCA0L = 0x7F;
+ 293   6                                              PCA0H = 0x00;                           
+ 294   6                                              }
+ 295   5                                                      prev_state =1;
+ 296   5                                              
+ 297   5                                      }
+ 298   4                                      else if( thresh0 <  rssi_dbm<   thresh1)
+ 299   4                                      {
+C51 COMPILER V7.20   TXWORWITHACK                                                          03/07/2007 17:05:31 PAGE 6   
+
+ 300   5                                                                // (Medium Amplitude ,Low tone )
+ 301   5                                              if(prev_state !=2){
+ 302   6                                              PCA0L = 0x00;
+ 303   6                                              PCA0H = 0x01;                                   
+ 304   6                                              }
+ 305   5                                              prev_state =2;
+ 306   5                                      
+ 307   5                                                      
+ 308   5                                      }
+ 309   4                                      else
+ 310   4                                      {                                       
+ 311   5                                                        // No Sound
+ 312   5                                                      prev_state =4;
+ 313   5                                                       CR =0;
+ 314   5                                      }
+ 315   4                              }
+ 316   3                              else
+ 317   3                              {
+ 318   4                                          if(prev_state !=0){
+ 319   5                                                      PCA0L = 0x3F;
+ 320   5                                                      PCA0H = 0x00;
+ 321   5      
+ 322   5                                              }
+ 323   4                                              prev_state =0;
+ 324   4                                      
+ 325   4                              }
+ 326   3                              halSpiStrobe(CCxxx0_SIDLE);
+ 327   3                                      
+ 328   3      
+ 329   3                        }
+ 330   2              }
+ 331   1         
+ 332   1      
+ 333   1         if (timeout) {
+ 334   2                  timeout = FALSE;
+ 335   2      
+ 336   2          }
+ 337   1              
+ 338   1      }// runReceiver
+ 339          
+ 340            
+ 341          
+ 342          
+ 343          
+ 344          //-------------------------------------------------------------------------------------------------------
+ 345          //  void TIMER1_ISR(void)
+ 346          //
+ 347          //  DESCRIPTION:
+ 348          //      This interrupt occurs every 1000 us, when timer1 overflows. The timer registers are reloaded and
+ 349          //      a packet is sent. This is a HIGH priority interrupt.
+ 350          //-------------------------------------------------------------------------------------------------------
+ 351          void TIMER1_ISR(void) interrupt INUM_TIMER1 {
+ 352   1      
+ 353   1      
+ 354   1          // Reload timer1 registers (see  initTransmitter() for calculation)
+ 355   1          TH1 = 0xE8;
+ 356   1          TL1 = 0x90; // this gives interval of 1000 us
+ 357   1      
+ 358   1                            
+ 359   1          // Check if more packets should be sent 
+ 360   1        if (packetCount < MAX_PACKET_BURST_TIMEOUT) {
+ 361   2      
+C51 COMPILER V7.20   TXWORWITHACK                                                          03/07/2007 17:05:31 PAGE 7   
+
+ 362   2                      // Enable interrupts upon incoming ACK when radio is in RX in between TX periods
+ 363   2              INT_SETFLAG(INUM_EXTERNAL0, INT_CLR);   // Clear the interrupt flag
+ 364   2              INT_ENABLE(INUM_EXTERNAL0, INT_ON);     // Enable the interrupt
+ 365   2              // Send packet
+ 366   2             // halRfSendPacket(txBuffer, sizeof(txBuffer));
+ 367   2                  halRfSendPacket(txBuffer, 1);
+ 368   2              // The radio should now automatically switch to RX waiting for an ACK (TXOFF_MODE = RX).
+ 369   2              // Increase the number of packets sent in the burst
+ 370   2              packetCount++;
+ 371   2      
+ 372   2      
+ 373   2      
+ 374   2          //Stop packet transmission (timeout) since no one is answering (No ACK is being received)
+ 375   2          } else {
+ 376   2                        packetCount =0;
+ 377   2          }
+ 378   1      }// TIMER1_ISR
+ 379          
+ 380          
+ 381          void TIMER0_ISR(void) interrupt INUM_TIMER0 {
+ 382   1      
+ 383   1              ENABLE_GLOBAL_INT(INT_OFF);
+ 384   1          // Reload timer1 registers (see  initTransmitter() for calculation)
+ 385   1          TH0 = 0xE8;
+ 386   1          TL0 = 0x90; // this gives interval of 1000*12 us
+ 387   1              INT_ENABLE(INUM_TIMER1, INT_ON);
+ 388   1          // Check if more packets should be sent 
+ 389   1      
+ 390   1               P_LED4 = ~P_LED4;                           // Toggle green LED for ACK received
+ 391   1      
+ 392   1      
+ 393   1                ENABLE_GLOBAL_INT(INT_ON);
+ 394   1          
+ 395   1      }// TIMER0_ISR
+ 396          
+ 397          
+ 398          
+ 399          //-------------------------------------------------------------------------------------------------------
+ 400          //  void EXTERNAL0_ISR(void)
+ 401          //
+ 402          //  DESCRIPTION:
+ 403          //      This ISR runs whenever CCxx00 has received a packet.
+ 404          //-------------------------------------------------------------------------------------------------------
+ 405          void EXTERNAL0_ISR(void) interrupt INUM_EXTERNAL0 {
+ 406   1          BYTE packetLength;
+ 407   1      
+ 408   1          // Disable new interrupts while running ISR
+ 409   1          ENABLE_GLOBAL_INT(INT_OFF);
+ 410   1      
+ 411   1          // Check if we got any packets in the RX FIFO
+ 412   1          // This status register is safe to read since it will not be updated after
+ 413   1          // the packet has been received (See the CC1100 or 2500 Errata Note)
+ 414   1          packetLength = halSpiReadStatus(CCxxx0_RXBYTES) & RX_BYTES;
+ 415   1      
+ 416   1          if (packetLength != 0) { // The RX FIFO got some packet content
+ 417   2      
+ 418   2              // Read out of RX FIFO into rxBuffer array.
+ 419   2              rxBuffer[0] = halSpiReadReg(CCxxx0_RXFIFO);
+ 420   2      
+ 421   2              // Check ACK
+ 422   2              if ((rxBuffer[0] ^ 0xFF) == txBuffer[0]) { // ACK received? 
+ 423   3      
+C51 COMPILER V7.20   TXWORWITHACK                                                          03/07/2007 17:05:31 PAGE 8   
+
+ 424   3      
+ 425   3                              INT_ENABLE(INUM_EXTERNAL0, INT_OFF);     // Enable the interrupt
+ 426   3                  // Stop packet burst
+ 427   3                  INT_ENABLE(INUM_TIMER1, INT_OFF);
+ 428   3      
+ 429   3      
+ 430   3                 // SET_BLED(LED_OFF);                          // Blue LED off; burst is over
+ 431   3      
+ 432   3                  burstDone = TRUE;
+ 433   3                              ackReceived=TRUE;
+ 434   3      
+ 435   3        
+ 436   3                  P_LED1 = ~P_LED1;                           // Toggle green LED for ACK received
+ 437   3              }
+ 438   2          } else {
+ 439   2      
+ 440   2              // Detected sync word, but got no packet in RX FIFO
+ 441   2              // Possible reasons: packet had wrong length or contained CRC errors.
+ 442   2              P_LED2 = ~P_LED2;                               // Toggle red LED for packet error
+ 443   2          }
+ 444   1      
+ 445   1      
+ 446   1          ENABLE_GLOBAL_INT(INT_ON);                          // Re-enable interrupts globally
+ 447   1      
+ 448   1          // The radio is now in IDLE state (RXOFF_MODE = IDLE)
+ 449   1          // The state transition happens automatically after end of received packet.
+ 450   1          // RX->IDLE (no FS calibration) : 0.1 us
+ 451   1        //  halSpiStrobe(CCxxx0_SWORRST);                   // Resets the real time clock
+ 452   1         // halSpiStrobe(CCxxx0_SWOR);                      // Starts Wake-on-Radio
+ 453   1      
+ 454   1      }// EXTERNAL0_ISR
+ 455          
+ 456          
+ 457          
+ 458          
+ 459          /******************************************************************************************************
+ 460           * Revision history:                                                                                  *
+ 461           *
+ 462           * $Log: TxWorWithAck.c,v $
+ 463           * Revision 1.2  2006/04/25 15:04:07  a0190596
+ 464           * Comments added
+ 465           *
+ 466           * Revision 1.1  2005/10/06 12:13:45  sna
+ 467           * Initial version in CVS.
+ 468           *
+ 469           *
+ 470           *
+ 471           ******************************************************************************************************/
+ 472          
+ 473          
+
+
+MODULE INFORMATION:   STATIC OVERLAYABLE
+   CODE SIZE        =    826    ----
+   CONSTANT SIZE    =   ----    ----
+   XDATA SIZE       =   ----    ----
+   PDATA SIZE       =   ----    ----
+   DATA SIZE        =     38       5
+   IDATA SIZE       =   ----    ----
+   BIT SIZE         =   ----    ----
+   EDATA SIZE       =   ----    ----
+   HDATA SIZE       =   ----    ----
+C51 COMPILER V7.20   TXWORWITHACK                                                          03/07/2007 17:05:31 PAGE 9   
+
+   XDATA CONST SIZE =   ----    ----
+   FAR CONST SIZE   =   ----    ----
+END OF MODULE INFORMATION.
+
+
+C51 COMPILATION COMPLETE.  0 WARNING(S),  0 ERROR(S)

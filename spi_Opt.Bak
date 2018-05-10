@@ -1,0 +1,115 @@
+### uVision2 Project, (C) Keil Software
+### Do not modify !
+
+ cExt (*.c)
+ aExt (*.s*; *.src; *.a*)
+ oExt (*.obj)
+ lExt (*.lib)
+ tExt (*.txt; *.h; *.inc)
+ pExt (*.plm)
+ CppX (*.cpp)
+ DaveTm { 0,0,0,0,0,0,0,0 }
+
+Target (spi_315), 0x0000 // Tools: 'MCS-51'
+Target (spi_433), 0x0000 // Tools: 'MCS-51'
+Target (spi_868), 0x0000 // Tools: 'MCS-51'
+Target (spi_915), 0x0000 // Tools: 'MCS-51'
+Target (wor_ack_2_4), 0x0000 // Tools: 'MCS-51'
+GRPOPT 1,(Source),0,0,0
+
+OPTFFF 1,1,4,0,0,0,0,0,<..\..\..\..\..\LIB\Chipcon\srf04\ebsrf04.LIB><ebsrf04.LIB> 
+OPTFFF 1,2,4,0,0,0,0,0,<..\..\..\..\..\LIB\Chipcon\srf04\halsrf04.LIB><halsrf04.LIB> 
+OPTFFF 1,3,1,1509949443,0,247,264,0,<.\TxWorWithAck.c><TxWorWithAck.c> { 44,0,0,0,2,0,0,0,3,0,0,0,255,255,255,255,255,255,255,255,252,255,255,255,233,255,255,255,132,0,0,0,132,0,0,0,87,4,0,0,37,2,0,0 }
+OPTFFF 1,4,1,402653185,0,55,55,0,<.\WorWithAck.c><WorWithAck.c> { 44,0,0,0,0,0,0,0,1,0,0,0,255,255,255,255,255,255,255,255,252,255,255,255,233,255,255,255,88,0,0,0,88,0,0,0,233,3,0,0,86,2,0,0 }
+OPTFFF 1,5,1,1,0,1,1,0,<.\RegSettings_Wor.c><RegSettings_Wor.c> { 44,0,0,0,0,0,0,0,1,0,0,0,255,255,255,255,255,255,255,255,252,255,255,255,233,255,255,255,154,0,0,0,154,0,0,0,43,4,0,0,152,2,0,0 }
+OPTFFF 1,6,1,0,0,1,1,0,<.\RxWorWithAck.c><RxWorWithAck.c> { 44,0,0,0,0,0,0,0,1,0,0,0,255,255,255,255,255,255,255,255,252,255,255,255,233,255,255,255,110,0,0,0,110,0,0,0,255,3,0,0,108,2,0,0 }
+
+ExtF <..\..\..\..\..\INC\CHIPCON\SRF04\C8051F330.H> 166,166,0,{ 44,0,0,0,0,0,0,0,1,0,0,0,255,255,255,255,255,255,255,255,252,255,255,255,233,255,255,255,132,0,0,0,132,0,0,0,69,4,0,0,19,2,0,0 }
+ExtF <..\..\..\..\..\INC\CHIPCON\SRF04\REGSSRF04.H> 925,945,0,{ 44,0,0,0,0,0,0,0,1,0,0,0,255,255,255,255,255,255,255,255,252,255,255,255,233,255,255,255,154,0,0,0,154,0,0,0,91,4,0,0,41,2,0,0 }
+ExtF <..\..\..\..\..\INC\CHIPCON\SRF04\HALSRF04.H> 77,99,0,{ 44,0,0,0,0,0,0,0,1,0,0,0,255,255,255,255,255,255,255,255,252,255,255,255,233,255,255,255,176,0,0,0,176,0,0,0,113,4,0,0,63,2,0,0 }
+
+TARGOPT 1, (spi_315)
+ CLK51=25000000
+  OPTTT 0,1,1,0
+  OPTHX 0,65535,0,0,0
+  OPTLX 120,65,8,<.\listings\>
+  OPTOX 16
+  OPTLT 1,1,1,0,1,1,0,1,0,0,0,0
+  OPTXL 1,1,1,1,1,1,1,0,0
+  OPTFL 0,0,0
+  OPTDL (S8051.DLL)()(DCYG.DLL)(-pCYGF320)(S8051.DLL)()(TCYG.DLL)(-pCYGF320)
+  OPTDBG 44030,-1,()()()()()()()()()() (BIN\SiC8051F.dll)()()()
+  OPTDF 0x0
+  OPTLE <>
+  OPTLC <>
+EndOpt
+
+TARGOPT 2, (spi_433)
+ CLK51=25000000
+  OPTTT 0,1,1,0
+  OPTHX 0,65535,0,0,0
+  OPTLX 120,65,8,<.\listings\>
+  OPTOX 16
+  OPTLT 1,1,1,0,1,1,0,1,0,0,0,0
+  OPTXL 1,1,1,1,1,1,1,0,0
+  OPTFL 0,0,0
+  OPTDL (S8051.DLL)()(DCYG.DLL)(-pCYGF320)(S8051.DLL)()(TCYG.DLL)(-pCYGF320)
+  OPTDBG 44030,-1,()()()()()()()()()() (BIN\SiC8051F.dll)()()()
+  OPTDF 0x0
+  OPTLE <>
+  OPTLC <>
+EndOpt
+
+TARGOPT 3, (spi_868)
+ CLK51=25000000
+  OPTTT 0,1,1,0
+  OPTHX 0,65535,0,0,0
+  OPTLX 120,65,8,<.\listings\>
+  OPTOX 16
+  OPTLT 1,1,1,0,1,1,0,1,0,0,0,0
+  OPTXL 1,1,1,1,1,1,1,0,0
+  OPTFL 0,0,0
+  OPTDL (S8051.DLL)()(DCYG.DLL)(-pCYGF320)(S8051.DLL)()(TCYG.DLL)(-pCYGF320)
+  OPTDBG 44030,-1,()()()()()()()()()() (BIN\SiC8051F.dll)()()()
+  OPTDF 0x0
+  OPTLE <>
+  OPTLC <>
+EndOpt
+
+TARGOPT 4, (spi_915)
+ CLK51=25000000
+  OPTTT 0,1,1,0
+  OPTHX 0,65535,0,0,0
+  OPTLX 120,65,8,<.\listings\>
+  OPTOX 16
+  OPTLT 1,1,1,0,1,1,0,1,0,0,0,0
+  OPTXL 1,1,1,1,1,1,1,0,0
+  OPTFL 0,0,0
+  OPTDL (S8051.DLL)()(DCYG.DLL)(-pCYGF320)(S8051.DLL)()(TCYG.DLL)(-pCYGF320)
+  OPTDBG 44030,-1,()()()()()()()()()() (BIN\SiC8051F.dll)()()()
+  OPTDF 0x0
+  OPTLE <>
+  OPTLC <>
+EndOpt
+
+TARGOPT 5, (wor_ack_2_4)
+ CLK51=25000000
+  OPTTT 1,1,1,0
+  OPTHX 0,65535,0,0,0
+  OPTLX 120,65,8,<.\listings\>
+  OPTOX 16
+  OPTLT 1,1,1,0,1,1,0,1,0,0,0,0
+  OPTXL 1,1,1,1,1,1,1,0,0
+  OPTFL 1,0,1
+  OPTBL 0,(Data Sheet)<DATASHTS\SILABS\C8051F33X.PDF>
+  OPTBL 1,(Data Short)<DATASHTS\SILABS\C8051F335_SHORT.PDF>
+  OPTDL (S8051.DLL)()(DCYG.DLL)(-pCYGF335)(S8051.DLL)()(TCYG.DLL)(-pCYGF335)
+  OPTDBG 44030,-1,()()()()()()()()()() (BIN\SiC8051F.dll)()()()
+  OPTKEY 0,(DLGTCYG)(8”|ÿÿÿÿ2”|«”|ë”|)
+  OPTKEY 0,(SiC8051F)(-S1 -B115200 -O1793 -J0 -K0 -L0 -M0 -A3 -P1)
+  OPTBB 0,0,99,1,0,0,0,0,0,0,<Spi.c>()()
+  OPTDF 0x84
+  OPTLE <>
+  OPTLC <>
+EndOpt
+
